@@ -18,14 +18,14 @@ import { PseudoHtmlDiff } from './RuntimeError/component-stack-pseudo-html'
 import {
   type HydrationErrorState,
   getHydrationWarningType,
-} from '../helpers/hydration-error-info'
+} from '../../../../errors/hydration-error-info'
 import {
   getUnhandledErrorType,
   isUnhandledConsoleOrRejection,
-} from '../helpers/console-error'
+} from '../../../../errors/console-error'
 import { extractNextErrorCode } from '../../../../../../lib/error-telemetry-utils'
-import { ErrorIndicator } from '../components/Errors/ErrorIndicator/ErrorIndicator'
-import { ErrorOverlayLayout } from '../components/Errors/ErrorOverlayLayout/ErrorOverlayLayout'
+import { DevToolsIndicator } from '../components/Errors/dev-tools-indicator/dev-tools-indicator'
+import { ErrorOverlayLayout } from '../components/Errors/error-overlay-layout/error-overlay-layout'
 
 export type SupportedErrorEvent = {
   id: number
@@ -38,6 +38,7 @@ export type ErrorsProps = {
   versionInfo?: VersionInfo
   hasStaticIndicator?: boolean
   debugInfo?: DebugInfo
+  isTurbopackEnabled: boolean
 }
 
 type ReadyErrorEvent = ReadyRuntimeError
@@ -108,6 +109,8 @@ export function Errors({
   initialDisplayState,
   hasStaticIndicator,
   debugInfo,
+  versionInfo,
+  isTurbopackEnabled,
 }: ErrorsProps) {
   const [lookups, setLookups] = useState(
     {} as { [eventId: string]: ReadyErrorEvent }
@@ -181,44 +184,44 @@ export function Errors({
     [activeIdx, readyErrors]
   )
 
+  const minimize = useCallback(() => setDisplayState('minimized'), [])
+
   // Reset component state when there are no errors to be displayed.
-  // This should never happen, but lets handle it.
+  // Note: We show the dev tools indicator in minimized state even with no errors
+  // as it serves as a persistent development tools access point
   useEffect(() => {
     if (errors.length < 1) {
       setLookups({})
-      setDisplayState('hidden')
+      minimize()
       setActiveIndex(0)
     }
-  }, [errors.length])
+  }, [errors.length, minimize])
 
-  const minimize = useCallback(() => setDisplayState('minimized'), [])
   const hide = useCallback(() => setDisplayState('hidden'), [])
   const fullscreen = useCallback(() => setDisplayState('fullscreen'), [])
-
-  // This component shouldn't be rendered with no errors, but if it is, let's
-  // handle it gracefully by rendering nothing.
-  if (errors.length < 1 || activeError == null) {
-    return null
-  }
-
-  if (isLoading) {
-    // TODO: better loading state
-    return <Overlay />
-  }
 
   if (displayState === 'hidden') {
     return null
   }
 
-  if (displayState === 'minimized') {
+  const noIssues = errors.length < 1 || activeError == null
+
+  if (noIssues || displayState === 'minimized') {
     return (
-      <ErrorIndicator
+      <DevToolsIndicator
         hasStaticIndicator={hasStaticIndicator}
         readyErrors={readyErrors}
         fullscreen={fullscreen}
         hide={hide}
+        versionInfo={versionInfo}
+        isTurbopackEnabled={isTurbopackEnabled}
       />
     )
+  }
+
+  if (isLoading) {
+    // TODO: better loading state
+    return <Overlay />
   }
 
   const error = activeError.error
@@ -244,6 +247,10 @@ export function Errors({
 
   const errorCode = extractNextErrorCode(error)
 
+  const footerMessage = isServerError
+    ? 'This error happened while generating the page. Any console logs will be displayed in the terminal window.'
+    : undefined
+
   return (
     <ErrorOverlayLayout
       errorCode={errorCode}
@@ -263,50 +270,42 @@ export function Errors({
       readyErrors={readyErrors}
       activeIdx={activeIdx}
       setActiveIndex={setActiveIndex}
-      temporaryHeaderChildren={
-        <>
-          {notes ? (
-            <>
-              <p
-                id="nextjs__container_errors__notes"
-                className="nextjs__container_errors__notes"
-              >
-                {notes}
-              </p>
-            </>
-          ) : null}
-          {hydrationWarning ? (
-            <p
-              id="nextjs__container_errors__link"
-              className="nextjs__container_errors__link"
-            >
-              <HotlinkedText text="See more info here: https://nextjs.org/docs/messages/react-hydration-error" />
-            </p>
-          ) : null}
-
-          {hydrationWarning &&
-          (activeError.componentStackFrames?.length ||
-            !!errorDetails.reactOutputComponentDiff) ? (
-            <PseudoHtmlDiff
-              className="nextjs__container_errors__component-stack"
-              hydrationMismatchType={hydrationErrorType}
-              componentStackFrames={activeError.componentStackFrames || []}
-              firstContent={serverContent}
-              secondContent={clientContent}
-              reactOutputComponentDiff={errorDetails.reactOutputComponentDiff}
-            />
-          ) : null}
-          {isServerError ? (
-            <div>
-              <small>
-                This error happened while generating the page. Any console logs
-                will be displayed in the terminal window.
-              </small>
-            </div>
-          ) : undefined}
-        </>
-      }
+      footerMessage={footerMessage}
+      versionInfo={versionInfo}
     >
+      <div className="error-overlay-notes-container">
+        {notes ? (
+          <>
+            <p
+              id="nextjs__container_errors__notes"
+              className="nextjs__container_errors__notes"
+            >
+              {notes}
+            </p>
+          </>
+        ) : null}
+        {hydrationWarning ? (
+          <p
+            id="nextjs__container_errors__link"
+            className="nextjs__container_errors__link"
+          >
+            <HotlinkedText text="See more info here: https://nextjs.org/docs/messages/react-hydration-error" />
+          </p>
+        ) : null}
+      </div>
+
+      {hydrationWarning &&
+      (activeError.componentStackFrames?.length ||
+        !!errorDetails.reactOutputComponentDiff) ? (
+        <PseudoHtmlDiff
+          className="nextjs__container_errors__component-stack"
+          hydrationMismatchType={hydrationErrorType}
+          componentStackFrames={activeError.componentStackFrames || []}
+          firstContent={serverContent}
+          secondContent={clientContent}
+          reactOutputComponentDiff={errorDetails.reactOutputComponentDiff}
+        />
+      ) : null}
       <RuntimeError key={activeError.id.toString()} error={activeError} />
     </ErrorOverlayLayout>
   )
@@ -316,57 +315,15 @@ export const styles = css`
   .nextjs-error-with-static {
     bottom: calc(var(--size-gap-double) * 4.5);
   }
-  .nextjs-container-errors-header {
-    position: relative;
-  }
-  .nextjs-container-errors-header > h1 {
-    font-size: var(--size-font-big);
-    line-height: var(--size-font-bigger);
-    font-weight: bold;
-    margin: calc(var(--size-gap-double) * 1.5) 0;
-    color: var(--color-title-h1);
-  }
-  .nextjs-container-errors-header small {
-    font-size: var(--size-font-small);
-    color: var(--color-accents-1);
-    margin-left: var(--size-gap-double);
-  }
-  .nextjs-container-errors-header small > span {
-    font-family: var(--font-stack-monospace);
-  }
-  .nextjs-container-errors-header p {
-    font-size: var(--size-font-small);
-    line-height: var(--size-font-big);
-    white-space: pre-wrap;
-  }
-  .nextjs__container_errors_desc {
-    font-family: var(--font-stack-monospace);
-    padding: var(--size-gap) var(--size-gap-double);
-    border-left: 2px solid var(--color-text-color-red-1);
-    margin-top: var(--size-gap);
-    font-weight: bold;
-    color: var(--color-text-color-red-1);
-    background-color: var(--color-text-background-red-1);
-  }
   p.nextjs__container_errors__link {
-    margin: var(--size-gap-double) auto;
     color: var(--color-text-color-red-1);
     font-weight: 600;
     font-size: 15px;
   }
   p.nextjs__container_errors__notes {
-    margin: var(--size-gap-double) auto;
     color: var(--color-stack-notes);
     font-weight: 600;
     font-size: 15px;
-  }
-  .nextjs-container-errors-header > div > small {
-    margin: 0;
-    margin-top: var(--size-gap-half);
-  }
-  .nextjs-container-errors-header > p > a {
-    color: inherit;
-    font-weight: bold;
   }
   .nextjs-container-errors-body > h2:not(:first-child) {
     margin-top: calc(var(--size-gap-double) + var(--size-gap));
@@ -377,6 +334,7 @@ export const styles = css`
     font-size: var(--size-font-big);
   }
   .nextjs__container_errors__component-stack {
+    margin: 0;
     padding: 12px 32px;
     color: var(--color-ansi-fg);
     background: var(--color-ansi-bg);
@@ -408,12 +366,6 @@ export const styles = css`
   .nextjs-toast-hide-button:hover {
     opacity: 1;
   }
-  .nextjs-container-errors-header
-    > .nextjs-container-build-error-version-status {
-    position: absolute;
-    top: 0;
-    right: 0;
-  }
   .nextjs__container_errors_inspect_copy_button {
     cursor: pointer;
     background: none;
@@ -429,10 +381,9 @@ export const styles = css`
     display: flex;
     align-items: center;
     justify-content: space-between;
+    margin-bottom: var(--size-3);
   }
-  .nextjs-data-runtime-error-inspect-link,
-  .nextjs-data-runtime-error-inspect-link:hover {
-    margin: 0 8px;
-    color: inherit;
+  .error-overlay-notes-container {
+    padding: 0 var (--size-4);
   }
 `

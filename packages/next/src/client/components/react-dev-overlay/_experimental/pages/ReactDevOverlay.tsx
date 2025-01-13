@@ -9,59 +9,57 @@ import { CssReset } from '../internal/styles/CssReset'
 
 import { ErrorBoundary } from '../../pages/ErrorBoundary'
 import { usePagesReactDevOverlay } from '../../pages/hooks'
+import { Colors } from '../internal/styles/colors'
 
 export type ErrorType = 'runtime' | 'build'
 
 interface ReactDevOverlayProps {
   children?: React.ReactNode
-  preventDisplay?: ErrorType[]
-  globalOverlay?: boolean
 }
 
-export default function ReactDevOverlay({
-  children,
-  preventDisplay,
-  globalOverlay,
-}: ReactDevOverlayProps) {
+export default function ReactDevOverlay({ children }: ReactDevOverlayProps) {
   const {
     isMounted,
-    displayPrevented,
     hasBuildError,
     hasRuntimeErrors,
     state,
     onComponentError,
-  } = usePagesReactDevOverlay(preventDisplay)
+  } = usePagesReactDevOverlay()
 
   return (
     <>
-      <ErrorBoundary
-        globalOverlay={globalOverlay}
-        isMounted={isMounted}
-        onError={onComponentError}
-      >
+      <ErrorBoundary isMounted={isMounted} onError={onComponentError}>
         {children ?? null}
       </ErrorBoundary>
-      {isMounted ? (
-        <ShadowPortal>
-          <CssReset />
-          <Base />
-          <ComponentStyles />
+      <ShadowPortal>
+        <CssReset />
+        <Base />
+        <Colors />
+        <ComponentStyles />
 
-          {displayPrevented ? null : hasBuildError ? (
-            <BuildError
-              message={state.buildError!}
-              versionInfo={state.versionInfo}
-            />
-          ) : hasRuntimeErrors ? (
-            <Errors
-              isAppDir={false}
-              errors={state.errors}
-              versionInfo={state.versionInfo}
-              initialDisplayState={'fullscreen'}
-            />
-          ) : undefined}
-        </ShadowPortal>
-      ) : undefined}
+        {hasBuildError ? (
+          <BuildError
+            message={state.buildError!}
+            versionInfo={state.versionInfo}
+          />
+        ) : hasRuntimeErrors ? (
+          <Errors
+            isAppDir={false}
+            errors={state.errors}
+            versionInfo={state.versionInfo}
+            initialDisplayState={'fullscreen'}
+            isTurbopackEnabled={!!process.env.TURBOPACK}
+          />
+        ) : (
+          <Errors
+            isAppDir={false}
+            errors={state.errors}
+            versionInfo={state.versionInfo}
+            initialDisplayState={'minimized'}
+            isTurbopackEnabled={!!process.env.TURBOPACK}
+          />
+        )}
+      </ShadowPortal>
     </>
   )
 }

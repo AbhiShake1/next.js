@@ -6,12 +6,14 @@ export type DialogProps = {
   type: 'error' | 'warning'
   'aria-labelledby': string
   'aria-describedby': string
+  className?: string
   onClose?: () => void
 }
 
 const Dialog: React.FC<DialogProps> = function Dialog({
   children,
   type,
+  className,
   onClose,
   ...props
 }) {
@@ -81,8 +83,8 @@ const Dialog: React.FC<DialogProps> = function Dialog({
       aria-labelledby={props['aria-labelledby']}
       aria-describedby={props['aria-describedby']}
       aria-modal="true"
+      className={className}
     >
-      <div data-nextjs-dialog-banner className={`banner-${type}`} />
       {children}
     </div>
   )

@@ -179,6 +179,7 @@ impl AppProject {
             Value::new(self.client_ty().await?.clone_value()),
             self.project().next_mode(),
             self.project().next_config(),
+            self.project().encryption_key(),
         ))
     }
 
@@ -213,6 +214,7 @@ impl AppProject {
             self.project().next_mode(),
             self.project().next_config(),
             NextRuntime::NodeJs,
+            self.project().encryption_key(),
         ))
     }
 
@@ -225,6 +227,7 @@ impl AppProject {
             self.project().next_mode(),
             self.project().next_config(),
             NextRuntime::Edge,
+            self.project().encryption_key(),
         ))
     }
 
@@ -237,6 +240,7 @@ impl AppProject {
             self.project().next_mode(),
             self.project().next_config(),
             NextRuntime::NodeJs,
+            self.project().encryption_key(),
         ))
     }
 
@@ -249,6 +253,7 @@ impl AppProject {
             self.project().next_mode(),
             self.project().next_config(),
             NextRuntime::Edge,
+            self.project().encryption_key(),
         ))
     }
 
@@ -551,6 +556,7 @@ impl AppProject {
             self.project().next_mode(),
             self.project().next_config(),
             NextRuntime::NodeJs,
+            self.project().encryption_key(),
         ))
     }
 
@@ -563,6 +569,7 @@ impl AppProject {
             self.project().next_mode(),
             self.project().next_config(),
             NextRuntime::Edge,
+            self.project().encryption_key(),
         ))
     }
 
@@ -800,7 +807,7 @@ enum AppPageEndpointType {
     Rsc,
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Debug, TraceRawVcs)]
+#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Debug, TraceRawVcs, NonLocalValue)]
 enum AppEndpointType {
     Page {
         ty: AppPageEndpointType,
@@ -815,7 +822,7 @@ enum AppEndpointType {
     },
 }
 
-#[turbo_tasks::value(local)]
+#[turbo_tasks::value]
 struct AppEndpoint {
     ty: AppEndpointType,
     app_project: ResolvedVc<AppProject>,
